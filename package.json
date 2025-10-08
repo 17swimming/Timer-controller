@@ -1,0 +1,40 @@
+{
+  "name": "timer-controller",
+  "version": "1.0.0",
+  "description": "A personal time management tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder"
+  },
+  "keywords": [
+    "time",
+    "management",
+    "tracker",
+    "electron"
+  ],
+  "author": "Timer Controller Team",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^26.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "auto-launch": "^5.0.6",
+    "lowdb": "^1.0.0"
+  },
+  "build": {
+    "appId": "com.timer.controller",
+    "productName": "Timer Controller",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "${productName}-portable-${version}.${ext}"
+    }
+  }
+}

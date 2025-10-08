@@ -1,0 +1,289 @@
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding: 20px 0;
+    background-color: #4a6fa5;
+    color: white;
+    border-radius: 8px;
+}
+
+header h1 {
+    font-size: 2.5em;
+    font-weight: 300;
+}
+
+/* 控制面板 */
+.control-panel {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn.primary {
+    background-color: #4a6fa5;
+    color: white;
+}
+
+.btn.secondary {
+    background-color: #ff6b6b;
+    color: white;
+}
+
+.btn:not(.primary):not(.secondary) {
+    background-color: #ddd;
+    color: #333;
+}
+
+/* 图表控制按钮 */
+.chart-controls {
+    margin-bottom: 15px;
+}
+
+.chart-btn {
+    padding: 8px 16px;
+    border: none;
+    background-color: #eee;
+    color: #333;
+    cursor: pointer;
+    margin-right: 10px;
+    border-radius: 4px;
+}
+
+.chart-btn.active {
+    background-color: #4a6fa5;
+    color: white;
+}
+
+.chart-btn:hover {
+    background-color: #ddd;
+}
+
+.chart-btn.active:hover {
+    background-color: #3a5f95;
+}
+
+/* 区块样式 */
+.section {
+    background-color: white;
+    margin-bottom: 30px;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.section h2 {
+    margin-bottom: 15px;
+    color: #4a6fa5;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+
+.section h3 {
+    margin: 15px 0;
+    color: #4a6fa5;
+}
+
+.history-list, .task-list {
+    min-height: 100px;
+}
+
+.placeholder {
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* 任务列表 */
+.task-item, .activity-item {
+    padding: 12px 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-item:last-child, .activity-item:last-child {
+    border-bottom: none;
+}
+
+.task-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.task-actions button {
+    padding: 5px 10px;
+    font-size: 14px;
+}
+
+.filter-buttons {
+    margin: 10px 0;
+}
+
+.filter-btn {
+    margin-right: 10px;
+    padding: 8px 15px;
+    background-color: #eee;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.filter-btn.active {
+    background-color: #4a6fa5;
+    color: white;
+}
+
+.completed {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* 图表容器 */
+.chart-container {
+    height: 300px;
+    position: relative;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+
+/* 弹窗样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 10% auto;
+    padding: 20px;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 500px;
+    position: relative;
+    animation: modalopen 0.4s;
+}
+
+.modal-content.large {
+    max-width: 800px;
+}
+
+@keyframes modalopen {
+    from {opacity: 0; transform: translateY(-60px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    position: absolute;
+    right: 20px;
+    top: 10px;
+}
+
+.close:hover,
+.close:focus {
+    color: black;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #4a6fa5;
+}
+
+/* 活动总结 */
+.activity-summary {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.unfinished-task {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+
+.unfinished-task label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.unfinished-task input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
