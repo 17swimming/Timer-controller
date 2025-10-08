@@ -1,12 +1,13 @@
 {
   "name": "timer-controller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A personal time management tool",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder"
+    "build": "electron-packager . Timer-Controller --platform=win32 --arch=x64 --out=dist --overwrite --icon=icon.ico",
+    "packager": "electron-packager . Timer-Controller --platform=win32 --arch=x64 --out=dist --overwrite --icon=icon.ico"
   },
   "keywords": [
     "time",
@@ -18,7 +19,7 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^26.0.0",
-    "electron-builder": "^24.0.0"
+    "electron-packager": "^17.1.2"
   },
   "dependencies": {
     "auto-launch": "^5.0.6",
