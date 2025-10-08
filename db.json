@@ -1,0 +1,50 @@
+{
+  "activities": [
+    {
+      "id": 1759669333516,
+      "name": "开发时间控制器",
+      "category": "study",
+      "T0": "2025-10-05T13:02:10.156Z",
+      "T1": "2025-10-05T13:02:13.516Z",
+      "duration": 0
+    },
+    {
+      "id": 1759670398875,
+      "name": "开发时间控制器",
+      "category": "study",
+      "T0": "2025-10-05T13:02:13.516Z",
+      "T1": "2025-10-05T13:19:58.875Z",
+      "duration": 17
+    },
+    {
+      "id": 1759672662029,
+      "name": "给老师发祝福",
+      "category": "other",
+      "T0": "2025-10-05T13:19:58.875Z",
+      "T1": "2025-10-05T13:57:42.029Z",
+      "duration": 37
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1759669446371,
+      "name": "给老师发祝福",
+      "completed": false,
+      "createdAt": "2025-10-05T13:04:06.371Z"
+    },
+    {
+      "id": 1759671006773,
+      "name": "统计IST中的pattern",
+      "completed": false,
+      "createdAt": "2025-10-05T13:30:06.773Z"
+    }
+  ],
+  "completedTasks": [],
+  "settings": {
+    "reminderInterval": 30
+  },
+  "appState": {
+    "currentDayStarted": false,
+    "currentT0": "2025-10-05T13:57:42.029Z"
+  }
+}
