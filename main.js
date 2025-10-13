@@ -39,15 +39,57 @@ function createWindow() {
 
   mainWindow.on('minimize', function (event) {
     event.preventDefault();
+    
+    // 先隐藏窗口
     mainWindow.hide();
     
-    // 创建托盘图标
-    if (!tray) {
-      createTray();
+    // 确保窗口完全隐藏后再发送消息
+    setTimeout(() => {
+      try {
+        // 显示悬浮球
+        mainWindow.webContents.send('window-minimized');
+        
+        // 创建托盘图标（如果还不存在）
+        if (!tray) {
+          createTray();
+        }
+      } catch (error) {
+        console.error('处理窗口最小化时出错:', error);
+      }
+    }, 100);
+  });
+
+  mainWindow.on('restore', function () {
+    try {
+      // 隐藏悬浮球
+      mainWindow.webContents.send('window-restored');
+      
+      // 如果托盘存在但上下文菜单没有，则重新设置
+      if (tray && !tray.getMenu()) {
+        const contextMenu = Menu.buildFromTemplate([
+          {
+            label: '显示主窗口',
+            click: function () {
+              mainWindow.show();
+            }
+          },
+          {
+            label: '退出',
+            click: function () {
+              app.isQuiting = true;
+              app.quit();
+            }
+          }
+        ]);
+        tray.setContextMenu(contextMenu);
+      }
+    } catch (error) {
+      console.error('处理窗口恢复时出错:', error);
     }
   });
 
   mainWindow.on('closed', function () {
+    if (tray) tray.destroy();
     mainWindow = null;
   });
 }
@@ -60,40 +102,68 @@ function initAutoLaunch() {
 }
 
 function createTray() {
+  let iconLoaded = false;
+  
   try {
-    // 尝试加载图标，如果不存在则使用默认文本
+    // 尝试加载PNG图标
     let iconPath = path.join(__dirname, 'icon.png');
     tray = new Tray(iconPath);
+    iconLoaded = true;
   } catch (error) {
-    // 如果图标文件不存在，使用替代方案
-    tray = new Tray(path.join(__dirname, 'icon.txt'));
-  }
-  
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: '显示主窗口',
-      click: function () {
-        mainWindow.show();
-      }
-    },
-    {
-      label: '退出',
-      click: function () {
-        app.isQuiting = true;
-        app.quit();
+    try {
+      // 如果PNG图标不存在，尝试ICO图标
+      let iconPath = path.join(__dirname, 'icon.ico');
+      tray = new Tray(iconPath);
+      iconLoaded = true;
+    } catch (error) {
+      // 如果ICO图标也不存在，使用系统默认图标
+      try {
+        tray = new Tray();
+        iconLoaded = true;
+      } catch (error) {
+        console.error('无法创建系统托盘图标:', error);
       }
     }
-  ]);
+  }
   
-  tray.setContextMenu(contextMenu);
-  tray.setIgnoreDoubleClickEvents(true);
-  tray.on('click', function () {
-    mainWindow.show();
-  });
+  // 只有在成功创建托盘图标时才设置上下文菜单
+  if (iconLoaded) {
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '显示主窗口',
+        click: function () {
+          mainWindow.show();
+        }
+      },
+      {
+        label: '退出',
+        click: function () {
+          app.isQuiting = true;
+          app.quit();
+        }
+      }
+    ]);
+    
+    tray.setContextMenu(contextMenu);
+    tray.setIgnoreDoubleClickEvents(true);
+    tray.on('click', function () {
+      mainWindow.show();
+    });
+    
+    // 设置托盘提示信息
+    tray.setToolTip('Timer Controller');
+  }
 }
 
 // 在应用启动时检查是否需要恢复状态
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  
+  // 当应用处于活动状态但没有窗口时，创建一个窗口
+  app.on('activate', function () {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
 
 // 当所有窗口都被关闭后退出应用
 app.on('window-all-closed', function () {
@@ -102,10 +172,9 @@ app.on('window-all-closed', function () {
   }
 });
 
-app.on('activate', function () {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
+// 处理应用退出时销毁托盘
+app.on('before-quit', function () {
+  if (tray) tray.destroy();
 });
 
 // 处理从渲染进程发送来的系统托盘消息
@@ -113,6 +182,20 @@ ipcMain.on('toggle-window', () => {
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
+    mainWindow.show();
+  }
+});
+
+// 处理显示主窗口的请求
+ipcMain.handle('show-main-window', async () => {
+  if (mainWindow) {
+    mainWindow.show();
+  }
+});
+
+// 添加一个新的IPC处理程序，用于显示窗口（通过悬浮球触发）
+ipcMain.on('show-window', () => {
+  if (mainWindow) {
     mainWindow.show();
   }
 });

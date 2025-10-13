@@ -20,6 +20,7 @@ const chartContainer = document.getElementById('chartContainer');
 const timeChart = document.getElementById('timeChart');
 const timelineChartBtn = document.getElementById('timelineChartBtn');
 const categoryChartBtn = document.getElementById('categoryChartBtn');
+const floatingBall = document.getElementById('floatingBall'); // 悬浮球元素
 
 // 应用状态
 let appState = {
@@ -38,8 +39,12 @@ let chartState = {
 // 事件监听器
 if (startDayBtn) startDayBtn.addEventListener('click', startDay);
 if (endDayBtn) endDayBtn.addEventListener('click', endDay);
-if (addActivityBtn) addActivityBtn.addEventListener('click', () => activityModal.style.display = 'block');
+if (addActivityBtn) addActivityBtn.addEventListener('click', () => {
+    updateTaskSelection(); // 更新任务选择列表
+    activityModal.style.display = 'block';
+});
 if (addTaskBtn) addTaskBtn.addEventListener('click', () => taskModal.style.display = 'block');
+if (floatingBall) floatingBall.addEventListener('click', showMainWindow); // 悬浮球点击事件
 
 // 图表视图切换
 if (timelineChartBtn) timelineChartBtn.addEventListener('click', () => {
@@ -61,6 +66,24 @@ document.querySelectorAll('.close').forEach(closeBtn => {
         taskModal.style.display = 'none';
         endDayModal.style.display = 'none';
     });
+});
+
+// 活动来源切换
+document.getElementById('activitySource').addEventListener('change', function() {
+    const manualInputSection = document.getElementById('manualInputSection');
+    const taskSelectionSection = document.getElementById('taskSelectionSection');
+    
+    if (this.value === 'manual') {
+        manualInputSection.style.display = 'block';
+        taskSelectionSection.style.display = 'none';
+        document.getElementById('activityName').required = true;
+        document.getElementById('selectedTask').required = false;
+    } else {
+        manualInputSection.style.display = 'none';
+        taskSelectionSection.style.display = 'block';
+        document.getElementById('activityName').required = false;
+        document.getElementById('selectedTask').required = true;
+    }
 });
 
 // 点击弹窗外部关闭
@@ -90,6 +113,52 @@ function setActiveChartButton(activeButton) {
     if (categoryChartBtn) categoryChartBtn.classList.remove('active');
     if (activeButton) activeButton.classList.add('active');
 }
+
+// 更新任务选择列表
+function updateTaskSelection() {
+    const taskSelect = document.getElementById('selectedTask');
+    if (!taskSelect) return;
+    
+    // 清空现有选项
+    taskSelect.innerHTML = '<option value="">请选择待办事项</option>';
+    
+    // 添加未完成的任务选项
+    appState.tasks.filter(task => !task.completed).forEach(task => {
+        const option = document.createElement('option');
+        option.value = task.name;
+        option.textContent = task.name;
+        taskSelect.appendChild(option);
+    });
+}
+
+// 显示主窗口
+function showMainWindow() {
+    // 通过IPC调用显示主窗口
+    ipcRenderer.send('show-window');
+}
+
+// 监听主进程发送的窗口状态变化消息
+ipcRenderer.on('window-minimized', () => {
+    // 显示悬浮球
+    if (floatingBall) {
+        // 确保元素存在且添加show类
+        floatingBall.style.display = 'flex'; // 强制显示元素
+        floatingBall.classList.add('show');
+    }
+});
+
+ipcRenderer.on('window-restored', () => {
+    // 隐藏悬浮球
+    if (floatingBall) {
+        floatingBall.classList.remove('show');
+        // 延迟隐藏元素，确保动画完成
+        setTimeout(() => {
+            if (!floatingBall.classList.contains('show')) {
+                floatingBall.style.display = 'none';
+            }
+        }, 300);
+    }
+});
 
 // 开始一天记录
 async function startDay() {
@@ -129,7 +198,20 @@ async function saveActivity(e) {
         return;
     }
     
-    const activityName = document.getElementById('activityName').value;
+    const activitySource = document.getElementById('activitySource').value;
+    let activityName = '';
+    
+    if (activitySource === 'manual') {
+        activityName = document.getElementById('activityName').value;
+    } else {
+        const selectedTask = document.getElementById('selectedTask');
+        activityName = selectedTask.value;
+        if (!activityName) {
+            alert('请选择一个待办事项！');
+            return;
+        }
+    }
+    
     const activityCategory = document.getElementById('activityCategory').value;
     const T1 = new Date();
     
@@ -258,6 +340,11 @@ function updateTaskList() {
             deleteTask(taskId);
         });
     });
+    
+    // 如果活动模态框是打开的，则更新任务选择列表
+    if (activityModal && activityModal.style.display === 'block') {
+        updateTaskSelection();
+    }
 }
 
 // 完成任务
@@ -276,6 +363,11 @@ async function completeTask(taskId) {
             appState.completedTasks.push(...appState.tasks.splice(taskIndex, 1));
             updateTaskList();
             updateCompletedTasks();
+            
+            // 如果活动模态框是打开的，则更新任务选择列表
+            if (activityModal && activityModal.style.display === 'block') {
+                updateTaskSelection();
+            }
         }
     } catch (error) {
         console.error('完成任务失败:', error);
@@ -293,6 +385,11 @@ async function deleteTask(taskId) {
         appState.completedTasks = appState.completedTasks.filter(task => task.id !== taskId);
         updateTaskList();
         updateCompletedTasks();
+        
+        // 如果活动模态框是打开的，则更新任务选择列表
+        if (activityModal && activityModal.style.display === 'block') {
+            updateTaskSelection();
+        }
     } catch (error) {
         console.error('删除任务失败:', error);
         alert('删除任务失败，请重试');
@@ -360,6 +457,12 @@ function endDay() {
     
     // 显示弹窗
     endDayModal.style.display = 'block';
+    
+    // 确保模态框内容可以滚动
+    const modalContent = endDayModal.querySelector('.modal-content');
+    if (modalContent) {
+        modalContent.scrollTop = 0;
+    }
 }
 
 // 显示今天的活动总结

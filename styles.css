@@ -31,6 +31,39 @@ header h1 {
     font-weight: 300;
 }
 
+/* 悬浮球样式 */
+.floating-ball {
+    position: fixed;
+    width: 60px;
+    height: 60px;
+    background-color: #4a6fa5;
+    border-radius: 50%;
+    display: none; /* 默认隐藏 */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 9999;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    right: 20px;
+    bottom: 20px;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0);
+    transition: all 0.3s ease;
+}
+
+.floating-ball.show {
+    display: flex; /* 显示元素 */
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+}
+
+.floating-ball span {
+    font-size: 24px;
+    color: white;
+}
+
 /* 控制面板 */
 .control-panel {
     display: flex;
@@ -212,6 +245,8 @@ header h1 {
 
 .modal-content.large {
     max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
 }
 
 @keyframes modalopen {
