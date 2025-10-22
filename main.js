@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, Notification } = require('electron');
 const path = require('path');
 const url = require('url');
 const Database = require('./db');
@@ -197,6 +197,156 @@ ipcMain.handle('show-main-window', async () => {
 ipcMain.on('show-window', () => {
   if (mainWindow) {
     mainWindow.show();
+  }
+});
+
+// 添加处理最小化窗口事件的代码
+ipcMain.handle('minimize-window', async () => {
+  if (mainWindow) {
+    mainWindow.minimize();
+  }
+});
+
+// 添加 IPC 处理程序，用于显示提醒通知
+ipcMain.handle('show-reminder-notification', async () => {
+  if (mainWindow) {
+    // 创建一个独立的浏览器窗口作为提醒弹窗
+    const notificationWindow = new BrowserWindow({
+      width: 400,
+      height: 300,
+      show: false,
+      frame: false,
+      alwaysOnTop: true,
+      resizable: false,
+      movable: false,
+      fullscreenable: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+    
+    // 设置窗口位置为中心
+    const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+    const x = Math.round((width - 400) / 2);
+    const y = Math.round((height - 300) / 2);
+    notificationWindow.setPosition(x, y);
+    
+    // 加载提醒内容
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>提醒</title>
+      <style>
+        body {
+          margin: 0;
+          padding: 0;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          background: linear-gradient(45deg, #FF4136, #FF851B);
+          height: 100vh;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          animation: pulse 1s infinite;
+        }
+        
+        .notification-box {
+          background: rgba(255, 255, 255, 0.95);
+          padding: 30px;
+          border-radius: 10px;
+          text-align: center;
+          box-shadow: 0 0 30px rgba(255, 133, 27, 0.8);
+          animation: bounce 0.5s ease infinite alternate;
+          max-width: 90%;
+        }
+        
+        h2 {
+          color: #FF4136;
+          font-size: 28px;
+          margin-bottom: 20px;
+          text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        p {
+          color: #333;
+          font-size: 18px;
+          margin-bottom: 30px;
+        }
+        
+        button {
+          background-color: #0074D9;
+          color: white;
+          border: none;
+          padding: 15px 30px;
+          font-size: 18px;
+          border-radius: 5px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+          transition: all 0.2s;
+        }
+        
+        button:hover {
+          background-color: #0056b3;
+          transform: translateY(-2px);
+        }
+        
+        @keyframes pulse {
+          0% { box-shadow: 0 0 10px rgba(255, 133, 27, 0.6); }
+          50% { box-shadow: 0 0 30px rgba(255, 133, 27, 0.9); }
+          100% { box-shadow: 0 0 10px rgba(255, 133, 27, 0.6); }
+        }
+        
+        @keyframes bounce {
+          from { transform: scale(1); }
+          to { transform: scale(1.02); }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="notification-box">
+        <h2>时间记录提醒</h2>
+        <p>您已经有一段时间没有记录活动了<br>请及时记录！</p>
+        <button id="closeNotification">我知道了，去记录</button>
+      </div>
+      <script>
+        const { ipcRenderer } = require('electron');
+        
+        document.getElementById('closeNotification').addEventListener('click', () => {
+          ipcRenderer.send('close-notification-window');
+        });
+        
+        // 点击窗口任何地方都关闭
+        document.body.addEventListener('click', (e) => {
+          if (e.target.tagName !== 'BUTTON') {
+            ipcRenderer.send('close-notification-window');
+          }
+        });
+      </script>
+    </body>
+    </html>`;
+    
+    // 加载HTML内容
+    notificationWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`);
+    
+    // 显示窗口
+    notificationWindow.once('ready-to-show', () => {
+      notificationWindow.show();
+      notificationWindow.focus();
+    });
+    
+    // 处理关闭通知窗口的消息
+    ipcMain.once('close-notification-window', () => {
+      if (notificationWindow) {
+        notificationWindow.close();
+        // 显示主窗口并聚焦
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    
+    return { success: true };
   }
 });
 

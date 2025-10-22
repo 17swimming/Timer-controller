@@ -31,6 +31,15 @@ let appState = {
     T0: null
 };
 
+// 提醒设置
+let reminderSettings = {
+    interval: 30, // 默认30分钟
+    enabled: true
+};
+
+// 提醒定时器
+let reminderTimer = null;
+
 // 图表状态
 let chartState = {
     viewType: 'timeline' // 'timeline' 或 'category'
@@ -45,6 +54,11 @@ if (addActivityBtn) addActivityBtn.addEventListener('click', () => {
 });
 if (addTaskBtn) addTaskBtn.addEventListener('click', () => taskModal.style.display = 'block');
 if (floatingBall) floatingBall.addEventListener('click', showMainWindow); // 悬浮球点击事件
+
+// 添加提醒设置按钮事件监听器
+document.addEventListener('DOMContentLoaded', () => {
+    createReminderSettingsButton();
+});
 
 // 图表视图切换
 if (timelineChartBtn) timelineChartBtn.addEventListener('click', () => {
@@ -170,6 +184,9 @@ async function startDay() {
     appState.dayStarted = true;
     appState.T0 = new Date();
     
+    // 启动提醒定时器
+    startReminderTimer();
+    
     // 通知主进程更新状态
     try {
         await ipcRenderer.invoke('start-day');
@@ -187,6 +204,112 @@ async function startDay() {
     updateActivityHistory();
     updateChart();
     alert(`已开始记录，起始时间: ${appState.T0.toLocaleString()}`);
+}
+
+// 启动提醒定时器
+function startReminderTimer() {
+    // 清除已存在的定时器
+    if (reminderTimer) {
+        clearInterval(reminderTimer);
+    }
+    
+    // 启动新的定时器
+    if (reminderSettings.enabled) {
+        reminderTimer = setInterval(() => {
+            showReminderNotification();
+        }, reminderSettings.interval * 60 * 1000); // 转换为毫秒
+    }
+}
+
+// 显示提醒通知
+function showReminderNotification() {
+    // 请求主进程显示提醒弹窗
+    ipcRenderer.invoke('show-reminder-notification');
+    
+    // 显示主窗口以便用户操作
+    ipcRenderer.invoke('show-main-window');
+}
+
+// 创建提醒设置按钮
+function createReminderSettingsButton() {
+    // 在控制面板中添加提醒设置按钮
+    const controlPanel = document.querySelector('.control-panel');
+    if (controlPanel) {
+        const reminderBtn = document.createElement('button');
+        reminderBtn.id = 'reminderSettingsBtn';
+        reminderBtn.className = 'btn';
+        reminderBtn.textContent = '提醒设置';
+        reminderBtn.addEventListener('click', showReminderSettings);
+        controlPanel.appendChild(reminderBtn);
+    }
+}
+
+// 显示提醒设置弹窗
+function showReminderSettings() {
+    // 创建提醒设置弹窗
+    const settingsModal = document.createElement('div');
+    settingsModal.id = 'reminderSettingsModal';
+    settingsModal.className = 'modal';
+    settingsModal.style.display = 'block';
+    
+    settingsModal.innerHTML = `
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>提醒设置</h2>
+            <form id="reminderSettingsForm">
+                <div class="form-group">
+                    <label for="reminderInterval">提醒间隔（分钟）:</label>
+                    <input type="number" id="reminderInterval" min="1" max="120" value="${reminderSettings.interval}" required>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="reminderEnabled" ${reminderSettings.enabled ? 'checked' : ''}>
+                        启用提醒功能
+                    </label>
+                </div>
+                <button type="submit" class="btn primary">保存设置</button>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(settingsModal);
+    
+    // 添加关闭事件
+    const closeBtn = settingsModal.querySelector('.close');
+    closeBtn.addEventListener('click', () => {
+        document.body.removeChild(settingsModal);
+    });
+    
+    // 点击背景关闭
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            document.body.removeChild(settingsModal);
+        }
+    });
+    
+    // 表单提交事件
+    const settingsForm = document.getElementById('reminderSettingsForm');
+    settingsForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const interval = parseInt(document.getElementById('reminderInterval').value);
+        const enabled = document.getElementById('reminderEnabled').checked;
+        
+        if (interval >= 1 && interval <= 120) {
+            reminderSettings.interval = interval;
+            reminderSettings.enabled = enabled;
+            
+            // 更新定时器
+            if (appState.dayStarted) {
+                startReminderTimer();
+            }
+            
+            document.body.removeChild(settingsModal);
+            alert('提醒设置已保存！');
+        } else {
+            alert('提醒间隔必须在1-120分钟之间');
+        }
+    });
 }
 
 // 记录活动
@@ -238,6 +361,9 @@ async function saveActivity(e) {
         appState.T0 = T1;
         // 通知主进程更新T0
         await ipcRenderer.invoke('update-t0', T1.toISOString());
+        
+        // 最小化窗口以显示悬浮球
+        ipcRenderer.invoke('minimize-window');
     } catch (error) {
         console.error('保存活动失败:', error);
         alert('保存活动失败，请重试');
