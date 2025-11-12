@@ -7,9 +7,9 @@
 </head>
 <body>
     <!-- 悬浮球元素 -->
-    <div id="floatingBall" class="floating-ball" style="display: none;">
-        <span>⏰</span>
-        <!-- <img src="icon.png" alt="Timer Controller" class="floating-ball-icon"> -->
+    <div id="floatingBall" class="floating-ball">
+        <img src="icon.png" alt="Timer Controller" class="floating-ball-icon" onerror="this.style.display='none';this.parentElement.querySelector('.fallback-icon').style.display='block'">
+        <span class="fallback-icon" style="display: none; font-size: 24px; color: white;">⏰</span>
     </div>
     
     <div class="container">

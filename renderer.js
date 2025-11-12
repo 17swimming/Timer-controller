@@ -22,6 +22,19 @@ const timelineChartBtn = document.getElementById('timelineChartBtn');
 const categoryChartBtn = document.getElementById('categoryChartBtn');
 const floatingBall = document.getElementById('floatingBall'); // 悬浮球元素
 
+// 悬浮球拖拽相关变量
+let isDragging = false;
+let isResizing = false;
+let currentX;
+let currentY;
+let initialX;
+let initialY;
+let xOffset = 0;
+let yOffset = 0;
+let dragStartX;
+let dragStartY;
+let ballSize = 100; // 默认大小
+
 // 应用状态
 let appState = {
     activities: [],
@@ -53,7 +66,20 @@ if (addActivityBtn) addActivityBtn.addEventListener('click', () => {
     activityModal.style.display = 'block';
 });
 if (addTaskBtn) addTaskBtn.addEventListener('click', () => taskModal.style.display = 'block');
-if (floatingBall) floatingBall.addEventListener('click', showMainWindow); // 悬浮球点击事件
+
+// 悬浮球事件监听器
+if (floatingBall) {
+    // 鼠标按下事件
+    floatingBall.addEventListener('mousedown', dragStart);
+    // 鼠标移动事件
+    window.addEventListener('mousemove', drag);
+    // 鼠标释放事件
+    window.addEventListener('mouseup', dragEnd);
+    // 双击调整大小
+    floatingBall.addEventListener('dblclick', resizeBall);
+    // 点击显示主窗口
+    floatingBall.addEventListener('click', showMainWindow);
+}
 
 // 添加提醒设置按钮事件监听器
 document.addEventListener('DOMContentLoaded', () => {
@@ -145,10 +171,73 @@ function updateTaskSelection() {
     });
 }
 
+// 悬浮球拖拽开始
+function dragStart(e) {
+    if (e.target === floatingBall || floatingBall.contains(e.target)) {
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+        
+        if (e.target === floatingBall || floatingBall.contains(e.target)) {
+            isDragging = true;
+        }
+    }
+}
+
+// 悬浮球拖拽中
+function drag(e) {
+    if (isDragging) {
+        e.preventDefault();
+        currentX = e.clientX - initialX;
+        currentY = e.clientY - initialY;
+        
+        xOffset = currentX;
+        yOffset = currentY;
+        
+        setTranslate(currentX, currentY, floatingBall);
+    }
+}
+
+// 悬浮球拖拽结束
+function dragEnd(e) {
+    initialX = currentX;
+    initialY = currentY;
+    
+    isDragging = false;
+}
+
+// 设置悬浮球位置
+function setTranslate(xPos, yPos, el) {
+    el.style.transform = "translate3d(" + xPos + "px, " + yPos + "px, 0)";
+}
+
+// 调整悬浮球大小
+function resizeBall() {
+    // 在80px到150px之间切换大小
+    if (ballSize === 100) {
+        ballSize = 130;
+    } else if (ballSize === 130) {
+        ballSize = 80;
+    } else {
+        ballSize = 100;
+    }
+    
+    floatingBall.style.width = ballSize + 'px';
+    floatingBall.style.height = ballSize + 'px';
+    
+    const icon = floatingBall.querySelector('.floating-ball-icon') || floatingBall.querySelector('.fallback-icon');
+    if (icon) {
+        icon.style.width = (ballSize - 20) + 'px';
+        icon.style.height = (ballSize - 20) + 'px';
+    }
+}
+
 // 显示主窗口
 function showMainWindow() {
-    // 通过IPC调用显示主窗口
-    ipcRenderer.send('show-window');
+    // 只有在非拖拽状态下才响应点击事件
+    if (!isDragging) {
+        // 通过IPC调用显示主窗口
+        ipcRenderer.send('show-window');
+    }
 }
 
 // 监听主进程发送的窗口状态变化消息
@@ -158,6 +247,11 @@ ipcRenderer.on('window-minimized', () => {
         // 确保元素存在且添加show类
         floatingBall.style.display = 'flex'; // 强制显示元素
         floatingBall.classList.add('show');
+        
+        // 确保悬浮球位置重置
+        setTranslate(0, 0, floatingBall);
+        xOffset = 0;
+        yOffset = 0;
     }
 });
 
@@ -215,9 +309,20 @@ function startReminderTimer() {
     
     // 启动新的定时器
     if (reminderSettings.enabled) {
-        reminderTimer = setInterval(() => {
+        // 使用当前时间作为提醒的起始时间点
+        const lastActivityTime = appState.T0 || new Date();
+        const intervalMs = reminderSettings.interval * 60 * 1000; // 转换为毫秒
+        const nextReminderTime = new Date(lastActivityTime.getTime() + intervalMs);
+        const delay = Math.max(0, nextReminderTime.getTime() - Date.now());
+        
+        // 先设置一个延迟到下次提醒时间的定时器
+        reminderTimer = setTimeout(() => {
             showReminderNotification();
-        }, reminderSettings.interval * 60 * 1000); // 转换为毫秒
+            // 然后设置周期性的提醒
+            reminderTimer = setInterval(() => {
+                showReminderNotification();
+            }, intervalMs);
+        }, delay);
     }
 }
 
@@ -326,6 +431,10 @@ async function saveActivity(e) {
     
     if (activitySource === 'manual') {
         activityName = document.getElementById('activityName').value;
+        if (!activityName.trim()) {
+            alert('请输入活动名称！');
+            return;
+        }
     } else {
         const selectedTask = document.getElementById('selectedTask');
         activityName = selectedTask.value;
@@ -362,6 +471,9 @@ async function saveActivity(e) {
         // 通知主进程更新T0
         await ipcRenderer.invoke('update-t0', T1.toISOString());
         
+        // 重新启动提醒定时器，使下一次提醒基于当前活动记录时间
+        startReminderTimer();
+        
         // 最小化窗口以显示悬浮球
         ipcRenderer.invoke('minimize-window');
     } catch (error) {
@@ -374,13 +486,20 @@ async function saveActivity(e) {
 function updateActivityHistory() {
     if (!activityHistory) return;
     
-    if (appState.activities.length === 0) {
+    // 只显示今天的活动
+    const today = new Date().toDateString();
+    const todayActivities = appState.activities.filter(activity => {
+        const activityDate = new Date(activity.T0).toDateString();
+        return activityDate === today;
+    });
+    
+    if (todayActivities.length === 0) {
         activityHistory.innerHTML = '<p class="placeholder">暂无活动记录</p>';
         return;
     }
     
     activityHistory.innerHTML = '';
-    appState.activities.forEach(activity => {
+    todayActivities.forEach(activity => {
         const T0 = new Date(activity.T0);
         const T1 = new Date(activity.T1);
         
@@ -595,13 +714,20 @@ function endDay() {
 function showTodayActivitiesSummary() {
     if (!todayActivitiesSummary) return;
     
-    if (appState.activities.length === 0) {
+    // 只显示今天的活动
+    const today = new Date().toDateString();
+    const todayActivities = appState.activities.filter(activity => {
+        const activityDate = new Date(activity.T0).toDateString();
+        return activityDate === today;
+    });
+    
+    if (todayActivities.length === 0) {
         todayActivitiesSummary.innerHTML = '<p>今天没有记录任何活动。</p>';
         return;
     }
     
     let summaryHTML = '<h3>今日活动总结</h3><div class="activity-summary">';
-    appState.activities.forEach(activity => {
+    todayActivities.forEach(activity => {
         const T0 = new Date(activity.T0);
         const T1 = new Date(activity.T1);
         
@@ -739,35 +865,38 @@ function updateChart() {
     }
 }
 
-// 绘制时间线图表
+// 绘制时间线图表（GitHub风格）
 function drawTimelineChart(ctx) {
     const margin = { top: 40, right: 20, bottom: 60, left: 80 };
     const chartWidth = timeChart.width - margin.left - margin.right;
     const chartHeight = timeChart.height - margin.top - margin.bottom;
     
+    // 只显示今天的活动
+    const today = new Date().toDateString();
+    const todayActivities = appState.activities.filter(activity => {
+        const activityDate = new Date(activity.T0).toDateString();
+        return activityDate === today;
+    });
+    
     // 获取时间范围
     let startTime, endTime;
     if (appState.T0) {
         startTime = new Date(appState.T0);
-    } else if (appState.activities.length > 0) {
-        startTime = new Date(appState.activities[0].T0);
+    } else if (todayActivities.length > 0) {
+        startTime = new Date(todayActivities[0].T0);
     } else {
         startTime = new Date();
         startTime.setHours(0, 0, 0, 0); // 设置为当天开始
     }
     
-    // 将开始时间调整为整点
-    const startHour = new Date(startTime);
-    startHour.setMinutes(0, 0, 0);
-    
-    if (appState.activities.length > 0) {
-        endTime = new Date(appState.activities[appState.activities.length - 1].T1);
+    if (todayActivities.length > 0) {
+        endTime = new Date(todayActivities[todayActivities.length - 1].T1);
     } else {
         endTime = new Date();
     }
     
     // 如果一天已经开始但还没有活动记录，将结束时间设为当前时间
-    if (appState.dayStarted && appState.activities.length === 0) {
+    if (appState.dayStarted && todayActivities.length === 0) {
         endTime = new Date();
     }
     
@@ -777,274 +906,142 @@ function drawTimelineChart(ctx) {
         endTime = new Date(); // 结束时间为当前时间
     }
     
-    // 确保结束时间至少比开始时间晚一个小时
-    if (endTime <= startHour) {
-        endTime = new Date(startHour.getTime() + 60 * 60 * 1000);
+    const totalDurationMs = endTime - startTime;
+    const totalDurationMinutes = totalDurationMs / (1000 * 60);
+    
+    if (totalDurationMinutes <= 0) {
+        // 显示提示信息
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#999';
+        ctx.fillText('暂无数据', timeChart.width/2, timeChart.height/2);
+        return;
     }
     
-    // 计算时间范围（小时数）
+    // GitHub风格的时间线视图
+    // 每个小时划分为4个15分钟的小方块
+    const startHour = new Date(startTime);
+    startHour.setMinutes(0, 0, 0);
+    
     const totalHours = Math.ceil((endTime - startHour) / (1000 * 60 * 60));
     const endHour = new Date(startHour.getTime() + totalHours * 60 * 60 * 1000);
     
-    // 纵坐标固定为60分钟
-    const totalDurationMinutes = 60;
-    const pixelsPerMinute = chartHeight / totalDurationMinutes;
+    // 计算方块尺寸
+    const squareSize = Math.min(20, Math.max(10, chartWidth / (totalHours * 4)));
+    const gap = 2;
+    
+    // 计算可以显示的小时数
+    const maxHours = Math.floor(chartWidth / (squareSize * 4 + gap));
+    const displayHours = Math.min(totalHours, maxHours);
+    
+    // 如果时间跨度太大，调整起始时间
+    let displayStartHour = startHour;
+    if (totalHours > maxHours) {
+        displayStartHour = new Date(endHour.getTime() - maxHours * 60 * 60 * 1000);
+    }
+    
+    // 绘制时间轴标签
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#000';
+    
+    // 绘制小时标签
+    for (let i = 0; i <= displayHours; i++) {
+        const hourTime = new Date(displayStartHour.getTime() + i * 60 * 60 * 1000);
+        const x = margin.left + i * (squareSize * 4 + gap) + (squareSize * 2);
+        
+        ctx.fillText(hourTime.getHours() + ':00', x, margin.top + chartHeight + 20);
+    }
+    
+    // 绘制Y轴标签
+    ctx.textAlign = 'right';
+    ctx.fillText('60分钟', margin.left - 10, margin.top + 15);
+    ctx.fillText('0分钟', margin.left - 10, margin.top + chartHeight);
     
     // 绘制坐标轴
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     
-    // X轴 (时间轴)
-    ctx.beginPath();
-    ctx.moveTo(margin.left, margin.top + chartHeight);
-    ctx.lineTo(margin.left + chartWidth, margin.top + chartHeight);
-    ctx.stroke();
-    
-    // Y轴 
+    // Y轴
     ctx.beginPath();
     ctx.moveTo(margin.left, margin.top);
     ctx.lineTo(margin.left, margin.top + chartHeight);
     ctx.stroke();
     
-    // 绘制X轴标签和网格线 (小时)
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#000';
+    // X轴
+    ctx.beginPath();
+    ctx.moveTo(margin.left, margin.top + chartHeight);
+    ctx.lineTo(margin.left + chartWidth, margin.top + chartHeight);
+    ctx.stroke();
     
-    // 计算每小时的宽度
-    const pixelsPerHour = chartWidth / totalHours;
-    
-    for (let h = 0; h <= totalHours; h++) {
-        const currentHour = new Date(startHour.getTime() + h * 60 * 60 * 1000);
-        const x = margin.left + h * pixelsPerHour;
-        
-        // 绘制网格线
-        ctx.strokeStyle = '#eee';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x, margin.top);
-        ctx.lineTo(x, margin.top + chartHeight);
-        ctx.stroke();
-        
-        // 绘制时间标签
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.fillText(
-            currentHour.getHours().toString().padStart(2, '0') + ':00',
-            x,
-            margin.top + chartHeight + 20
-        );
-        
-        // 绘制刻度线
-        ctx.beginPath();
-        ctx.moveTo(x, margin.top + chartHeight);
-        ctx.lineTo(x, margin.top + chartHeight + 5);
-        ctx.stroke();
+    // 绘制小方块
+    for (let h = 0; h < displayHours; h++) {
+        for (let q = 0; q < 4; q++) {
+            const x = margin.left + h * (squareSize * 4 + gap) + q * (squareSize + gap);
+            const y = margin.top;
+            
+            // 默认颜色（无活动）
+            ctx.fillStyle = '#ebedf0';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            
+            // 绘制方块
+            ctx.fillRect(x, y, squareSize, chartHeight);
+            ctx.strokeRect(x, y, squareSize, chartHeight);
+        }
     }
     
-    // 绘制Y轴标签 (每60分钟一格，固定为0和60)
-    ctx.textAlign = 'right';
-    
-    // 绘制0分钟线
-    const y0 = margin.top + chartHeight;
-    ctx.strokeStyle = '#eee';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(margin.left, y0);
-    ctx.lineTo(margin.left + chartWidth, y0);
-    ctx.stroke();
-    
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.fillText(
-        '0分钟',
-        margin.left - 10,
-        y0 + 4
-    );
-    
-    ctx.beginPath();
-    ctx.moveTo(margin.left - 5, y0);
-    ctx.lineTo(margin.left, y0);
-    ctx.stroke();
-    
-    // 绘制60分钟线
-    const y60 = margin.top;
-    ctx.strokeStyle = '#eee';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(margin.left, y60);
-    ctx.lineTo(margin.left + chartWidth, y60);
-    ctx.stroke();
-    
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.fillText(
-        '60分钟',
-        margin.left - 10,
-        y60 + 4
-    );
-    
-    ctx.beginPath();
-    ctx.moveTo(margin.left - 5, y60);
-    ctx.lineTo(margin.left, y60);
-    ctx.stroke();
-    
-    // 绘制活动条
-    appState.activities.forEach((activity, index) => {
-        // 特殊处理未完成任务进度记录
-        if (activity.progress !== undefined) {
-            return; // 暂时不显示进度记录在时间线上
-        }
+    // 根据活动填充方块
+    todayActivities.forEach(activity => {
+        const activityStart = new Date(activity.T0);
+        const activityEnd = new Date(activity.T1);
+        const category = activity.category;
+        const color = getCategoryColor(category);
         
-        const T0 = new Date(activity.T0);
-        const T1 = new Date(activity.T1);
-        
-        // 计算活动在图表中的位置
-        const startTotalMinutes = (T0 - startHour) / (1000 * 60);
-        const endTotalMinutes = (T1 - startHour) / (1000 * 60);
-        
-        const startHourIndex = Math.floor(startTotalMinutes / 60);
-        const endHourIndex = Math.floor(endTotalMinutes / 60);
-        
-        const startMinuteInHour = startTotalMinutes % 60;
-        const endMinuteInHour = endTotalMinutes % 60;
-        
-        // 如果活动跨越多个小时，则需要分段绘制
-        for (let hourIndex = startHourIndex; hourIndex <= endHourIndex; hourIndex++) {
-            let minuteStart, minuteEnd;
+        // 计算活动在时间轴上的位置
+        for (let h = 0; h < displayHours; h++) {
+            const hourStart = new Date(displayStartHour.getTime() + h * 60 * 60 * 1000);
+            const hourEnd = new Date(hourStart.getTime() + 60 * 60 * 1000);
             
-            if (hourIndex === startHourIndex) {
-                minuteStart = startMinuteInHour;
-            } else {
-                minuteStart = 0;
-            }
-            
-            if (hourIndex === endHourIndex) {
-                minuteEnd = endMinuteInHour;
-            } else {
-                minuteEnd = 60;
-            }
-            
-            // 计算位置
-            const x = margin.left + hourIndex * pixelsPerHour;
-            const barWidth = pixelsPerHour;
-            const y = margin.top + chartHeight - minuteEnd * pixelsPerMinute;
-            const barHeight = (minuteEnd - minuteStart) * pixelsPerMinute;
-            
-            // 确保位置有效
-            if (x >= margin.left && x <= margin.left + chartWidth && barHeight > 0) {
-                // 绘制活动条
-                ctx.fillStyle = getCategoryColor(activity.category);
-                ctx.fillRect(x, y, barWidth, barHeight);
+            // 如果活动与这个小时有交集
+            if (activityStart < hourEnd && activityEnd > hourStart) {
+                // 计算交集时间段
+                const intersectStart = activityStart > hourStart ? activityStart : hourStart;
+                const intersectEnd = activityEnd < hourEnd ? activityEnd : hourEnd;
+                const intersectMinutes = (intersectEnd - intersectStart) / (1000 * 60);
                 
-                // 绘制边框
-                ctx.strokeStyle = '#333';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, barWidth, barHeight);
-                
-                // 如果时间段足够大，绘制活动名称
-                if (barHeight > 15 && barWidth > 30) {
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'left';
+                // 将交集时间分配到4个15分钟的方块中
+                for (let q = 0; q < 4; q++) {
+                    const quarterStart = new Date(hourStart.getTime() + q * 15 * 60 * 1000);
+                    const quarterEnd = new Date(quarterStart.getTime() + 15 * 60 * 1000);
                     
-                    // 截断过长的文本
-                    let displayName = activity.name;
-                    if (ctx.measureText(displayName).width > barWidth - 10) {
-                        while (ctx.measureText(displayName + '...').width > barWidth - 10 && displayName.length > 0) {
-                            displayName = displayName.slice(0, -1);
+                    // 如果活动与这个15分钟时间段有交集
+                    if (intersectStart < quarterEnd && intersectEnd > quarterStart) {
+                        const quarterIntersectStart = intersectStart > quarterStart ? intersectStart : quarterStart;
+                        const quarterIntersectEnd = intersectEnd < quarterEnd ? intersectEnd : quarterEnd;
+                        const quarterMinutes = (quarterIntersectEnd - quarterIntersectStart) / (1000 * 60);
+                        
+                        // 如果在这个15分钟时间段内有活动，则着色
+                        if (quarterMinutes > 0) {
+                            const x = margin.left + h * (squareSize * 4 + gap) + q * (squareSize + gap);
+                            const y = margin.top;
+                            
+                            ctx.fillStyle = color;
+                            ctx.strokeStyle = '#fff';
+                            ctx.lineWidth = 1;
+                            
+                            // 根据活动时间占这个15分钟时间段的比例来填充高度
+                            const fillHeight = Math.min(chartHeight, (quarterMinutes / 15) * chartHeight);
+                            const fillY = y + chartHeight - fillHeight;
+                            
+                            ctx.fillRect(x, fillY, squareSize, fillHeight);
+                            ctx.strokeRect(x, y, squareSize, chartHeight);
                         }
-                        displayName += '...';
                     }
-                    
-                    ctx.fillText(
-                        displayName,
-                        x + 5,
-                        y + barHeight/2 + 3
-                    );
                 }
             }
         }
     });
-    
-    // 如果一天已经开始，绘制当前活动
-    if (appState.dayStarted && appState.T0) {
-        const T0 = new Date(appState.T0);
-        const T1 = new Date();
-        
-        const startTotalMinutes = (T0 - startHour) / (1000 * 60);
-        const endTotalMinutes = (T1 - startHour) / (1000 * 60);
-        
-        const startHourIndex = Math.floor(startTotalMinutes / 60);
-        const endHourIndex = Math.floor(endTotalMinutes / 60);
-        
-        const startMinuteInHour = startTotalMinutes % 60;
-        const endMinuteInHour = endTotalMinutes % 60;
-        
-        // 如果当前活动跨越多个小时，则需要分段绘制
-        for (let hourIndex = startHourIndex; hourIndex <= endHourIndex; hourIndex++) {
-            let minuteStart, minuteEnd;
-            
-            if (hourIndex === startHourIndex) {
-                minuteStart = startMinuteInHour;
-            } else {
-                minuteStart = 0;
-            }
-            
-            if (hourIndex === endHourIndex) {
-                minuteEnd = endMinuteInHour;
-            } else {
-                minuteEnd = 60;
-            }
-            
-            // 计算位置
-            const x = margin.left + hourIndex * pixelsPerHour;
-            const barWidth = pixelsPerHour;
-            const y = margin.top + chartHeight - minuteEnd * pixelsPerMinute;
-            const barHeight = (minuteEnd - minuteStart) * pixelsPerMinute;
-            
-            // 确保位置有效
-            if (x >= margin.left && x <= margin.left + chartWidth && barHeight > 0) {
-                // 绘制当前活动条（半透明）
-                ctx.fillStyle = 'rgba(100, 100, 100, 0.5)';
-                ctx.fillRect(x, y, barWidth, barHeight);
-                
-                // 绘制边框
-                ctx.strokeStyle = '#333';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, barWidth, barHeight);
-                
-                // 如果时间段足够大，绘制活动名称
-                if (barHeight > 15 && barWidth > 30) {
-                    ctx.fillStyle = '#000';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'left';
-                    ctx.fillText(
-                        '当前活动',
-                        x + 5,
-                        y + barHeight/2 + 3
-                    );
-                }
-            }
-        }
-    }
-    
-    // 绘制标题
-    ctx.fillStyle = '#000';
-    ctx.font = '16px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('时间线活动分布', timeChart.width / 2, 20);
-    
-    // 绘制X轴标题
-    ctx.fillText('时间 (小时)', timeChart.width / 2, timeChart.height - 10);
-    
-    // 绘制Y轴标题
-    ctx.save();
-    ctx.translate(20, timeChart.height / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center';
-    ctx.fillText('分钟', 0, 0);
-    ctx.restore();
     
     // 绘制图例
     drawLegend(ctx, margin, chartWidth, chartHeight);
@@ -1056,9 +1053,15 @@ function drawCategoryChart(ctx) {
     const chartWidth = timeChart.width - margin.left - margin.right;
     const chartHeight = timeChart.height - margin.top - margin.bottom;
     
-    // 按类别统计时间
+    // 按类别统计时间（只统计当天的活动）
+    const today = new Date().toDateString();
+    const todayActivities = appState.activities.filter(activity => {
+        const activityDate = new Date(activity.T0).toDateString();
+        return activityDate === today;
+    });
+    
     const categoryStats = {};
-    appState.activities.forEach(activity => {
+    todayActivities.forEach(activity => {
         if (!categoryStats[activity.category]) {
             categoryStats[activity.category] = 0;
         }
@@ -1183,7 +1186,14 @@ function drawCategoryChart(ctx) {
 
 // 绘制图例
 function drawLegend(ctx, margin, chartWidth, chartHeight) {
-    const allActivities = [...appState.activities];
+    // 只显示当天活动涉及的类别
+    const today = new Date().toDateString();
+    const todayActivities = appState.activities.filter(activity => {
+        const activityDate = new Date(activity.T0).toDateString();
+        return activityDate === today;
+    });
+    
+    const allActivities = [...todayActivities];
     
     // 如果一天已经开始，添加当前活动到图例
     if (appState.dayStarted) {

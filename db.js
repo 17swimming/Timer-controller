@@ -2,19 +2,46 @@ const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 const path = require('path');
 const { app } = require('electron');
+const fs = require('fs');
 
-// 数据库存储路径
-const dbPath = path.join(__dirname, 'db.json');
+// 数据库存储路径 - 使用用户数据目录而不是应用目录
+// 这样在应用更新后数据仍然可以保留
+const userDataPath = app.getPath('userData');
+const dbPath = path.join(userDataPath, 'db.json');
+
+// 如果用户数据目录中没有数据库文件，但应用目录中有，则复制过去
+const oldDbPath = path.join(__dirname, 'db.json');
+if (!fs.existsSync(dbPath) && fs.existsSync(oldDbPath)) {
+    fs.copyFileSync(oldDbPath, dbPath);
+}
+
+// 如果数据库文件不存在，则创建一个默认的
+if (!fs.existsSync(dbPath)) {
+    const defaultData = {
+        activities: [],
+        tasks: [],
+        completedTasks: [],
+        settings: {
+            reminderInterval: 30
+        },
+        appState: {
+            currentDayStarted: false,
+            currentT0: null
+        }
+    };
+    fs.writeFileSync(dbPath, JSON.stringify(defaultData, null, 2));
+}
+
 const adapter = new FileSync(dbPath);
 const db = low(adapter);
 
-// 设置默认数据
+// 设置默认数据（如果数据库中没有这些字段）
 db.defaults({
     activities: [],
     tasks: [],
     completedTasks: [],
     settings: {
-        reminderInterval: 30 // 分钟
+        reminderInterval: 30 // 默认提醒间隔（分钟）
     },
     appState: {
         currentDayStarted: false,
